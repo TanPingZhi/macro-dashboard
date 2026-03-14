@@ -24,6 +24,16 @@ This project strictly follows a **Bloomberg Terminal** aesthetic:
   - Secondary text / Positive indicators are Vibrant Green (`#00E676`).
 - **Styling**: Vanilla CSS only. No Tailwind or other utility frameworks. Use CSS variables defined in `:root` for consistency.
 
+## Todo
+
+### In Progress
+- [ ] **Watchlist performance** — charts re-render on every tab switch. Fix by memoizing chart components (e.g. `React.memo`, `useMemo`) or keeping the watchlist tab mounted but hidden (`display: none`) so chart state is preserved.
+
+### Upcoming
+- [ ] **Macro data** — new page/section for macroeconomic indicators (e.g. CPI, GDP, unemployment, Fed rate). Needs new backend endpoints and a dedicated frontend view.
+
+---
+
 ## Implemented Features
 - **Backend (`FastAPI` + `yfinance`)**: Serves historical market data to the frontend via `/api/data/{ticker}`. Accepts `period` and `interval` parameters.
 - **Frontend (`Vite React` + `SWC`)**:
