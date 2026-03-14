@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: macro-dashboard-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: ALLOWED_ORIGINS
+        value: https://macro-dashboard-frontend.onrender.com
+
+  - type: static
+    name: macro-dashboard-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://macro-dashboard-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
