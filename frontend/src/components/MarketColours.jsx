@@ -22,6 +22,15 @@ const cache = {
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
+function formatCompact(v) {
+  if (v == null) return '';
+  if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+  if (v >= 10000)   return (v / 1000).toFixed(1) + 'k';
+  if (v >= 1000)    return v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  if (v >= 1)       return v.toFixed(2);
+  return v.toPrecision(3);
+}
+
 function pctColor(pct) {
   if (pct === null || pct === undefined) return '#666666';
   if (pct > 0) return '#00E676';
@@ -50,6 +59,23 @@ function zscoreColor(z) {
 }
 
 // ─── sub-components ─────────────────────────────────────────────────────────
+
+function RangeCell({ pct, lo, hi }) {
+  if (pct === null || pct === undefined) {
+    return <span className="mct-range mct-range-na">—</span>;
+  }
+  const color = pct >= 80 ? '#00E676' : pct <= 20 ? '#FF3B30' : '#888888';
+  const tooltip = `Low: ${formatCompact(lo)}  ·  High: ${formatCompact(hi)}  ·  Position: ${pct.toFixed(1)}%`;
+  return (
+    <span className="mct-range" title={tooltip}>
+      <span className="mct-range-bar">
+        <span className="mct-range-fill" style={{ width: `${pct}%`, background: color }} />
+        <span className="mct-range-marker" style={{ left: `${pct}%`, background: color }} />
+      </span>
+      <span className="mct-range-pct" style={{ color }}>{pct.toFixed(0)}%</span>
+    </span>
+  );
+}
 
 function VolCell({ vol, zscore }) {
   if (vol === null || vol === undefined) {
@@ -88,6 +114,8 @@ function AssetRow({ item }) {
       <span className="mct-pct" style={{ color }}>{pctStr}</span>
       <span className="mct-change" style={{ color }}>{changeStr}</span>
       <VolCell vol={item.hvol} zscore={item.vol_zscore} />
+      <RangeCell pct={item.year_pct}  lo={item.year_lo}  hi={item.year_hi} />
+      <RangeCell pct={item.month_pct} lo={item.month_lo} hi={item.month_hi} />
     </div>
   );
 }
@@ -106,6 +134,8 @@ function AssetSection({ name, items }) {
         <span className="mct-pct">DAY %</span>
         <span className="mct-change">CHANGE</span>
         <span className="mct-hvol">1M HVOL</span>
+        <span className="mct-range">1Y RANGE</span>
+        <span className="mct-range">1M RANGE</span>
       </div>
       {items.map(item => <AssetRow key={item.ticker} item={item} />)}
     </div>

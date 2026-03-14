@@ -204,12 +204,28 @@ def get_market_colours():
                     if std_vol > 0:
                         vol_zscore = (hvol - mean_vol) / std_vol
 
+            # Price ranges — use High/Low columns where available
+            has_hl = "High" in df.columns and "Low" in df.columns
+
+            def range_pct(window_df):
+                hi = float(window_df["High"].max()) if has_hl else float(window_df["Close"].max())
+                lo = float(window_df["Low"].min())  if has_hl else float(window_df["Close"].min())
+                pct = round((last_close - lo) / (hi - lo) * 100, 1) if hi > lo else None
+                return round(lo, 4), round(hi, 4), pct
+
+            year_df  = df.iloc[-252:] if len(df) >= 252 else df
+            month_df = df.iloc[-21:]  if len(df) >= 21  else df
+            year_lo,  year_hi,  year_pct  = range_pct(year_df)
+            month_lo, month_hi, month_pct = range_pct(month_df)
+
             return {
                 "price": round(last_close, 4),
                 "change": round(change, 4),
                 "pct_change": round(pct_change, 2),
                 "hvol": round(hvol, 1) if hvol is not None else None,
                 "vol_zscore": round(vol_zscore, 2) if vol_zscore is not None else None,
+                "year_lo": year_lo, "year_hi": year_hi, "year_pct": year_pct,
+                "month_lo": month_lo, "month_hi": month_hi, "month_pct": month_pct,
             }
         except Exception:
             return None
@@ -227,6 +243,12 @@ def get_market_colours():
                 "pct_change": data["pct_change"] if data else None,
                 "hvol": data["hvol"] if data else None,
                 "vol_zscore": data["vol_zscore"] if data else None,
+                "year_lo": data["year_lo"] if data else None,
+                "year_hi": data["year_hi"] if data else None,
+                "year_pct": data["year_pct"] if data else None,
+                "month_lo": data["month_lo"] if data else None,
+                "month_hi": data["month_hi"] if data else None,
+                "month_pct": data["month_pct"] if data else None,
             })
 
     return result

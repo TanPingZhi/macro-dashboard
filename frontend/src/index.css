@@ -552,11 +552,11 @@ h1, h2, h3 {
   color: var(--text-muted);
 }
 
-/* Shared column grid: Name | Symbol | Price | Day% | Change | 1M Vol */
+/* Shared column grid: Name | Symbol | Price | Day% | Change | 1M Vol | 1Y Range | 1M Range */
 .mct-col-headers,
 .mct-row {
   display: grid;
-  grid-template-columns: 175px 155px 135px 95px 115px 195px;
+  grid-template-columns: 160px 130px 120px 85px 105px 185px 120px 120px;
   padding: 4px 14px;
   align-items: center;
 }
@@ -634,6 +634,52 @@ h1, h2, h3 {
   opacity: 0.85;
   font-style: italic;
   min-width: 40px;
+  text-align: right;
+}
+
+/* ── Range columns ── */
+.mct-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.mct-range-na {
+  color: #444;
+}
+
+.mct-range-bar {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 4px;
+  background: #1e1e1e;
+  border-radius: 2px;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+.mct-range-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  opacity: 0.35;
+}
+
+.mct-range-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 10px;
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+
+.mct-range-pct {
+  font-size: 12px;
+  font-weight: bold;
+  min-width: 30px;
   text-align: right;
 }
 
