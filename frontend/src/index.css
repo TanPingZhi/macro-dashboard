@@ -54,9 +54,18 @@ h1, h2, h3 {
   letter-spacing: 1px;
 }
 
-.header-controls {
+.ticker-search-form {
   display: flex;
   gap: 10px;
+  align-items: center;
+}
+
+.ticker-search-wrapper {
+  position: relative;
+}
+
+.terminal-input {
+  width: 300px;
 }
 
 .terminal-input {
@@ -106,7 +115,8 @@ h1, h2, h3 {
   border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  height: 500px;
+  height: 100%;
+  position: relative;
 }
 
 /* Hide TradingView Attribution */
@@ -115,12 +125,18 @@ h1, h2, h3 {
 }
 
 .chart-header {
-  padding: 5px 10px;
-  background-color: #222;
+  padding: 8px 12px;
+  background-color: #1a1a1a;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: grab;
+  user-select: none;
+}
+
+.chart-header:active {
+  cursor: grabbing;
 }
 
 .chart-title {
@@ -211,4 +227,56 @@ h1, h2, h3 {
 .react-draggable-dragging iframe, 
 .react-resizable-resizing iframe {
   pointer-events: none;
+}
+
+/* ===  AUTOCOMPLETE DROPDOWN === */
+.autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background-color: #111;
+  border: 1px solid var(--text-primary);
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 9999;
+  padding: 0;
+  margin: 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.8);
+  min-width: 380px;
+}
+
+.autocomplete-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #1e1e1e;
+  transition: background-color 0.1s;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background-color: #1c1c1c;
+  border-left: 2px solid var(--text-primary);
+}
+
+.autocomplete-symbol {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: bold;
+  font-size: 13px;
+  min-width: 120px;
+  white-space: nowrap;
+}
+
+.autocomplete-label {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
