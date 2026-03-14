@@ -1,0 +1,214 @@
+@import "node_modules/react-grid-layout/css/styles.css";
+@import "node_modules/react-resizable/css/styles.css";
+
+:root {
+  --bg-color: #000000;
+  --text-primary: #FF8F00; /* Bloomberg Amber/Orange */
+  --text-secondary: #00E676; /* Vibrant Green */
+  --text-muted: #888888;
+  --border-color: #333333;
+  --panel-bg: #111111;
+  --font-mono: 'Courier New', Courier, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+h1, h2, h3 {
+  color: var(--text-primary);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-container {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 10px;
+}
+
+.header-title {
+  font-weight: bold;
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+
+.header-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.terminal-input {
+  background-color: var(--bg-color);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  outline: none;
+  text-transform: uppercase;
+}
+
+.terminal-input:focus {
+  border-color: var(--text-primary);
+}
+
+.terminal-btn {
+  background-color: var(--border-color);
+  color: var(--text-primary);
+  border: 1px solid var(--text-primary);
+  padding: 5px 15px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.terminal-btn:hover {
+  background-color: var(--text-primary);
+  color: var(--bg-color);
+}
+
+.charts-grid {
+  display: grid;
+  /* 
+    Using minmax(30%, 1fr) lets it comfortably fit 3 across on wide screens, 
+    2 across on medium screens, and 1 on very small screens.
+  */
+  grid-template-columns: repeat(auto-fit, minmax(30%, 1fr));
+  gap: 15px;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.chart-panel {
+  background-color: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  height: 500px;
+}
+
+/* Hide TradingView Attribution */
+.tradingview-widget-copyright {
+  display: none !important;
+}
+
+.chart-header {
+  padding: 5px 10px;
+  background-color: #222;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chart-title {
+  color: var(--text-secondary);
+  font-weight: bold;
+}
+
+.chart-close {
+  color: #ff3333;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.chart-close:hover {
+  color: #ff0000;
+}
+
+.chart-content {
+  flex: 1;
+  position: relative;
+}
+
+/* Custom scrollbar for terminal feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-primary);
+}
+
+.timeframe-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.tf-btn {
+  background-color: var(--bg-color);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.tf-btn.active {
+  background-color: var(--border-color);
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+/* React Grid Layout Overrides */
+.react-grid-item.react-grid-placeholder {
+  background: var(--text-secondary);
+  opacity: 0.2;
+}
+
+/* Ensure Resize handle is permanently visible and sits above the iframe */
+.react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+  z-index: 100; /* Must sit above TradingView iframe */
+}
+
+.react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-primary);
+  border-bottom: 2px solid var(--text-primary);
+}
+
+/* Disable pointer events on the iframe when dragging/resizing so the mouse isn't trapped */
+.react-draggable-dragging iframe, 
+.react-resizable-resizing iframe {
+  pointer-events: none;
+}
