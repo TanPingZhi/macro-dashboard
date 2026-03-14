@@ -1,111 +1,161 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const API_BASE = 'http://localhost:8000';
 
-// Maps a pct_change value to a background colour intensity
-function getTileColor(pct) {
-  if (pct === null || pct === undefined) return { bg: '#1a1a1a', text: '#888888' };
-  const abs = Math.abs(pct);
-  const intensity = Math.min(abs / 3, 1); // saturates at ±3%
-
-  if (pct > 0) {
-    // Green scale: darker green → bright green
-    const g = Math.round(50 + intensity * 180);
-    const r = Math.round(0 + intensity * 10);
-    const b = Math.round(0 + intensity * 30);
-    const bg = `rgba(${r}, ${g}, ${b}, ${0.15 + intensity * 0.5})`;
-    const border = `rgba(0, ${g}, ${b}, 0.6)`;
-    return { bg, border, text: '#00E676' };
-  } else if (pct < 0) {
-    // Red scale: dark red → bright red
-    const r = Math.round(80 + intensity * 175);
-    const g = Math.round(0 + intensity * 20);
-    const b = Math.round(0 + intensity * 20);
-    const bg = `rgba(${r}, ${g}, ${b}, ${0.15 + intensity * 0.5})`;
-    const border = `rgba(${r}, 0, 0, 0.6)`;
-    return { bg, border, text: '#FF3B30' };
-  } else {
-    return { bg: '#1a1a1a', border: '#333', text: '#888888' };
-  }
-}
-
-function formatPrice(price, ticker) {
-  if (price === null || price === undefined) return 'N/A';
-  // Currencies and rates need more decimals
-  if (ticker && (ticker.includes('=X') || ticker.startsWith('^'))) {
-    return price.toFixed(3);
-  }
-  return price.toFixed(2);
-}
-
-function AssetTile({ item }) {
-  const { bg, border, text } = getTileColor(item.pct_change);
-  const sign = item.pct_change > 0 ? '+' : '';
-  const pctStr = item.pct_change !== null ? `${sign}${item.pct_change.toFixed(2)}%` : 'N/A';
-  const priceStr = formatPrice(item.price, item.ticker);
-  const changeSign = item.change > 0 ? '+' : '';
-  const changeStr = item.change !== null ? `${changeSign}${item.change.toFixed(2)}` : '';
-
-  return (
-    <div
-      className="mc-tile"
-      style={{
-        backgroundColor: bg,
-        borderColor: border || '#333333',
-      }}
-      title={item.ticker}
-    >
-      <div className="mc-tile-label">{item.label}</div>
-      <div className="mc-tile-price">{priceStr}</div>
-      <div className="mc-tile-pct" style={{ color: text }}>{pctStr}</div>
-      <div className="mc-tile-change" style={{ color: text }}>{changeStr}</div>
-    </div>
-  );
-}
-
-function AssetGroup({ name, items }) {
-  return (
-    <div className="mc-group">
-      <div className="mc-group-header">
-        <span className="mc-group-title">{name}</span>
-        <span className="mc-group-count">{items.length} instruments</span>
-      </div>
-      <div className="mc-tiles-grid">
-        {items.map(item => (
-          <AssetTile key={item.ticker} item={item} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Section order for display
 const SECTION_ORDER = [
   'Major Indices',
   'Sector Indices',
   'Countries',
   'Currencies',
   'Rates',
-  'Commodities',
+  'Energy',
+  'Metals',
+  'Agriculture',
 ];
 
-export function MarketColours() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
+// Module-level cache — survives page switches (component unmount/remount)
+const cache = {
+  data: null,
+  fetchedAt: null,
+  activeSections: new Set(SECTION_ORDER), // persists toggle state across page switches
+};
 
-  const fetchData = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+function pctColor(pct) {
+  if (pct === null || pct === undefined) return '#666666';
+  if (pct > 0) return '#00E676';
+  if (pct < 0) return '#FF3B30';
+  return '#888888';
+}
+
+function formatPrice(price, ticker) {
+  if (price === null || price === undefined) return 'N/A';
+  if (price >= 1000) {
+    return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  if (ticker && (ticker.includes('=X') || ticker.startsWith('^'))) {
+    return price.toFixed(3);
+  }
+  return price.toFixed(2);
+}
+
+// Z-score tiers — relative to the instrument's own 5-year vol distribution
+function zscoreColor(z) {
+  if (z === null || z === undefined) return '#555';
+  if (z >=  2.0) return '#FF3B30'; // extreme — top ~2.5%
+  if (z >=  1.0) return '#FF8F00'; // elevated — top ~16%
+  if (z >= -1.0) return '#888888'; // normal range
+  return '#4a9aba';                // unusually quiet — bottom ~16%
+}
+
+// ─── sub-components ─────────────────────────────────────────────────────────
+
+function VolCell({ vol, zscore }) {
+  if (vol === null || vol === undefined) {
+    return <span className="mct-hvol mct-hvol-na">—</span>;
+  }
+  const color = zscoreColor(zscore);
+  const fill = zscore !== null ? Math.min(Math.max(zscore / 3, 0), 1) * 100 : 0;
+  const zLabel = zscore !== null
+    ? `${zscore >= 0 ? '+' : ''}${zscore.toFixed(1)}σ`
+    : '—';
+  return (
+    <span className="mct-hvol" style={{ color }}>
+      <span className="mct-vol-bar">
+        <span className="mct-vol-fill" style={{ width: `${fill}%`, background: color }} />
+      </span>
+      {vol.toFixed(1)}%
+      <span className="mct-vol-z">{zLabel}</span>
+    </span>
+  );
+}
+
+function AssetRow({ item }) {
+  const pct = item.pct_change;
+  const sign = pct > 0 ? '+' : '';
+  const pctStr = pct !== null ? `${sign}${pct.toFixed(2)}%` : 'N/A';
+  const changeSign = item.change !== null && item.change > 0 ? '+' : '';
+  const changeStr = item.change !== null ? `${changeSign}${item.change.toFixed(2)}` : '';
+  const priceStr = formatPrice(item.price, item.ticker);
+  const color = pctColor(pct);
+
+  return (
+    <div className="mct-row">
+      <span className="mct-label">{item.label}</span>
+      <span className="mct-ticker">{item.ticker}</span>
+      <span className="mct-price">{priceStr}</span>
+      <span className="mct-pct" style={{ color }}>{pctStr}</span>
+      <span className="mct-change" style={{ color }}>{changeStr}</span>
+      <VolCell vol={item.hvol} zscore={item.vol_zscore} />
+    </div>
+  );
+}
+
+function AssetSection({ name, items }) {
+  return (
+    <div className="mct-section">
+      <div className="mct-section-header">
+        <span className="mct-section-title">{name}</span>
+        <span className="mct-section-count">{items.length} instruments</span>
+      </div>
+      <div className="mct-col-headers">
+        <span className="mct-label">NAME</span>
+        <span className="mct-ticker">SYMBOL</span>
+        <span className="mct-price">PRICE</span>
+        <span className="mct-pct">DAY %</span>
+        <span className="mct-change">CHANGE</span>
+        <span className="mct-hvol">1M HVOL</span>
+      </div>
+      {items.map(item => <AssetRow key={item.ticker} item={item} />)}
+    </div>
+  );
+}
+
+function CategoryFilter({ active, onToggle, onAll, onNone }) {
+  return (
+    <div className="mc-filter-bar">
+      <span className="mc-filter-label">SHOW</span>
+      {SECTION_ORDER.map(section => (
+        <button
+          key={section}
+          className={`mc-filter-btn ${active.has(section) ? 'mc-filter-active' : ''}`}
+          onClick={() => onToggle(section)}
+        >
+          {section}
+        </button>
+      ))}
+      <div className="mc-filter-sep" />
+      <button className="mc-filter-meta" onClick={onAll}>ALL</button>
+      <button className="mc-filter-meta" onClick={onNone}>NONE</button>
+    </div>
+  );
+}
+
+// ─── main component ──────────────────────────────────────────────────────────
+
+export function MarketColours() {
+  const [data, setData] = useState(cache.data);
+  const [loading, setLoading] = useState(cache.data === null);
+  const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(cache.fetchedAt);
+  const [refreshing, setRefreshing] = useState(false);
+  // Mirror cache.activeSections into React state so toggling re-renders
+  const [activeSections, setActiveSections] = useState(new Set(cache.activeSections));
+
+  const fetchData = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) setRefreshing(true);
+    else if (cache.data === null) setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/market-colours`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
+      const now = new Date();
+      cache.data = json;
+      cache.fetchedAt = now;
       setData(json);
-      setLastUpdated(new Date());
+      setLastUpdated(now);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -115,17 +165,37 @@ export function MarketColours() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-    // Auto-refresh every 60 seconds
-    const interval = setInterval(() => fetchData(true), 60000);
+    if (cache.data === null) fetchData();
+    const interval = setInterval(() => fetchData(false), 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  const toggleSection = useCallback((section) => {
+    setActiveSections(prev => {
+      const next = new Set(prev);
+      next.has(section) ? next.delete(section) : next.add(section);
+      cache.activeSections = next;
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    const next = new Set(SECTION_ORDER);
+    cache.activeSections = next;
+    setActiveSections(next);
+  }, []);
+
+  const selectNone = useCallback(() => {
+    const next = new Set();
+    cache.activeSections = next;
+    setActiveSections(next);
+  }, []);
 
   if (loading) {
     return (
       <div className="mc-loading">
         <div className="mc-loading-text">FETCHING MARKET DATA<span className="mc-blink">_</span></div>
-        <div className="mc-loading-sub">Loading ~60 instruments across 6 asset classes...</div>
+        <div className="mc-loading-sub">Loading instruments across 8 asset classes...</div>
       </div>
     );
   }
@@ -140,7 +210,6 @@ export function MarketColours() {
     );
   }
 
-  // Compute summary stats
   const allItems = data ? Object.values(data).flat() : [];
   const withData = allItems.filter(i => i.pct_change !== null);
   const advancers = withData.filter(i => i.pct_change > 0).length;
@@ -150,9 +219,10 @@ export function MarketColours() {
     ? (withData.reduce((s, i) => s + i.pct_change, 0) / withData.length).toFixed(2)
     : '0.00';
 
+  const visibleSections = SECTION_ORDER.filter(s => activeSections.has(s) && data?.[s]);
+
   return (
     <div className="mc-container">
-      {/* Summary bar */}
       <div className="mc-summary-bar">
         <div className="mc-summary-item">
           <span className="mc-summary-label">ADVANCERS</span>
@@ -175,6 +245,13 @@ export function MarketColours() {
             {avgChange > 0 ? '+' : ''}{avgChange}%
           </span>
         </div>
+        <div className="mc-summary-sep">|</div>
+        <div className="mc-summary-item">
+          <span className="mc-summary-label">1M HVOL</span>
+          <span className="mc-summary-label" style={{ color: '#888' }}>
+            z-score vs 5y rolling distribution
+          </span>
+        </div>
         <div className="mc-summary-spacer" />
         <div className="mc-summary-time">
           {lastUpdated && `LAST UPDATED: ${lastUpdated.toLocaleTimeString()}`}
@@ -188,24 +265,21 @@ export function MarketColours() {
         </button>
       </div>
 
-      {/* Legend */}
-      <div className="mc-legend">
-        <span className="mc-legend-label">COLOUR SCALE:</span>
-        <div className="mc-legend-bar">
-          <span className="mc-legend-neg">-3%</span>
-          <div className="mc-legend-gradient" />
-          <span className="mc-legend-pos">+3%</span>
-        </div>
-        <span className="mc-legend-note">| Daily change vs prior close</span>
-      </div>
+      <CategoryFilter
+        active={activeSections}
+        onToggle={toggleSection}
+        onAll={selectAll}
+        onNone={selectNone}
+      />
 
-      {/* Asset class sections */}
       <div className="mc-sections">
-        {SECTION_ORDER.map(section => (
-          data[section] && (
-            <AssetGroup key={section} name={section} items={data[section]} />
-          )
-        ))}
+        {visibleSections.length === 0 ? (
+          <div className="mc-no-sections">NO CATEGORIES SELECTED</div>
+        ) : (
+          visibleSections.map(section => (
+            <AssetSection key={section} name={section} items={data[section]} />
+          ))
+        )}
       </div>
     </div>
   );

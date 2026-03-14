@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 from datetime import datetime, timedelta
 import pandas as pd
+import numpy as np
+import math
 
 app = FastAPI(title="Macro Dashboard API")
 
@@ -116,16 +118,39 @@ def get_market_colours():
             {"ticker": "HYG",   "label": "High Yield"},
             {"ticker": "LQD",   "label": "Inv Grade"},
         ],
-        "Commodities": [
-            {"ticker": "GC=F",  "label": "Gold"},
-            {"ticker": "SI=F",  "label": "Silver"},
-            {"ticker": "CL=F",  "label": "Crude Oil WTI"},
-            {"ticker": "BZ=F",  "label": "Brent Crude"},
-            {"ticker": "NG=F",  "label": "Nat Gas"},
-            {"ticker": "HG=F",  "label": "Copper"},
-            {"ticker": "ZC=F",  "label": "Corn"},
-            {"ticker": "ZW=F",  "label": "Wheat"},
-            {"ticker": "ZS=F",  "label": "Soybeans"},
+        "Energy": [
+            # Futures — front month (roll effect in vol; use ETFs for cleaner vol)
+            {"ticker": "CL=F",  "label": "WTI Crude (fut)"},
+            {"ticker": "BZ=F",  "label": "Brent Crude (fut)"},
+            {"ticker": "NG=F",  "label": "Nat Gas (fut)"},
+            # ETFs — no roll distortion
+            {"ticker": "USO",   "label": "USO (oil ETF)"},
+            {"ticker": "BNO",   "label": "BNO (brent ETF)"},
+            {"ticker": "UNG",   "label": "UNG (gas ETF)"},
+            {"ticker": "XLE",   "label": "XLE (energy eq)"},
+        ],
+        "Metals": [
+            # Futures
+            {"ticker": "GC=F",  "label": "Gold (fut)"},
+            {"ticker": "SI=F",  "label": "Silver (fut)"},
+            {"ticker": "HG=F",  "label": "Copper (fut)"},
+            # ETFs
+            {"ticker": "GLD",   "label": "GLD (gold ETF)"},
+            {"ticker": "SLV",   "label": "SLV (silver ETF)"},
+            {"ticker": "COPX",  "label": "COPX (copper eq)"},
+        ],
+        "Agriculture": [
+            # Futures
+            {"ticker": "ZC=F",  "label": "Corn (fut)"},
+            {"ticker": "ZW=F",  "label": "Wheat (fut)"},
+            {"ticker": "ZS=F",  "label": "Soybeans (fut)"},
+            {"ticker": "KC=F",  "label": "Coffee (fut)"},
+            {"ticker": "SB=F",  "label": "Sugar (fut)"},
+            # ETFs
+            {"ticker": "CORN",  "label": "CORN (corn ETF)"},
+            {"ticker": "WEAT",  "label": "WEAT (wheat ETF)"},
+            {"ticker": "SOYB",  "label": "SOYB (soy ETF)"},
+            {"ticker": "DBA",   "label": "DBA (agri broad)"},
         ],
     }
 
@@ -135,9 +160,9 @@ def get_market_colours():
         for item in group:
             all_tickers.append(item["ticker"])
 
-    # Fetch last 5 days for all tickers in one call
+    # Fetch 5 years of daily data — needed for the rolling vol z-score distribution
     try:
-        raw = yf.download(all_tickers, period="5d", interval="1d", group_by="ticker", auto_adjust=True, progress=False)
+        raw = yf.download(all_tickers, period="5y", interval="1d", group_by="ticker", auto_adjust=True, progress=False)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -160,10 +185,31 @@ def get_market_colours():
             change = last_close - prev_close
             pct_change = (change / prev_close) * 100 if prev_close != 0 else 0
 
+            closes = df["Close"]
+            log_ret = np.log(closes / closes.shift(1)).dropna()
+
+            # Current 1-month vol: std of last 21 log returns, annualised
+            hvol = None
+            recent_21 = log_ret.iloc[-21:]
+            if len(recent_21) >= 2:
+                hvol = float(recent_21.std() * math.sqrt(252) * 100)
+
+            # 5-year rolling 21-day vol distribution → z-score of current vol
+            vol_zscore = None
+            if len(log_ret) >= 42 and hvol is not None:
+                rolling_vols = log_ret.rolling(21).std().dropna() * math.sqrt(252) * 100
+                if len(rolling_vols) >= 20:
+                    mean_vol = float(rolling_vols.mean())
+                    std_vol = float(rolling_vols.std())
+                    if std_vol > 0:
+                        vol_zscore = (hvol - mean_vol) / std_vol
+
             return {
                 "price": round(last_close, 4),
                 "change": round(change, 4),
                 "pct_change": round(pct_change, 2),
+                "hvol": round(hvol, 1) if hvol is not None else None,
+                "vol_zscore": round(vol_zscore, 2) if vol_zscore is not None else None,
             }
         except Exception:
             return None
@@ -179,6 +225,8 @@ def get_market_colours():
                 "price": data["price"] if data else None,
                 "change": data["change"] if data else None,
                 "pct_change": data["pct_change"] if data else None,
+                "hvol": data["hvol"] if data else None,
+                "vol_zscore": data["vol_zscore"] if data else None,
             })
 
     return result
