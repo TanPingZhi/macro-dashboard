@@ -1,12 +1,54 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SYMBOLS } from '../data/symbols';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export function TickerSearch({ onAdd }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
+
+  const [iwbSymbols, setIwbSymbols] = useState([]);
+
+  // iShares-backed autocomplete: fetch once, then merge with the hardcoded symbols.
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/autocomplete-symbols?limit=1000`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (cancelled) return;
+        setIwbSymbols(Array.isArray(json.symbols) ? json.symbols : []);
+      } catch {
+        // If iShares fetching fails, we silently fall back to hardcoded symbols.
+        if (cancelled) return;
+        setIwbSymbols([]);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dedupeBySymbol = (items) => {
+    const seen = new Set();
+    const out = [];
+    for (const item of items) {
+      const sym = item?.symbol;
+      if (!sym) continue;
+      const key = sym.toUpperCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+    return out;
+  };
 
   useEffect(() => {
     if (query.trim().length === 0) {
@@ -15,13 +57,14 @@ export function TickerSearch({ onAdd }) {
       return;
     }
     const q = query.trim().toUpperCase();
-    const filtered = SYMBOLS.filter(
+    const allSymbols = dedupeBySymbol([...SYMBOLS, ...iwbSymbols]);
+    const filtered = allSymbols.filter(
       s => s.symbol.toUpperCase().includes(q) || s.label.toUpperCase().includes(q)
     ).slice(0, 10); // cap at 10 suggestions
     setSuggestions(filtered);
     setOpen(filtered.length > 0);
     setActiveIndex(-1);
-  }, [query]);
+  }, [query, iwbSymbols]);
 
   // Close dropdown on outside click
   useEffect(() => {

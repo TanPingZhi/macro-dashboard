@@ -5,6 +5,10 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 import math
+import urllib.request
+import urllib.error
+from typing import Any, Dict, List, Optional
+from io import BytesIO
 
 app = FastAPI(title="Macro Dashboard API")
 
@@ -20,6 +24,98 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── iShares-backed autocomplete (proxy) ─────────────────────────────────────
+#
+# We use iShares Russell 1000 ETF holdings (the CSV behind their Excel download)
+# to get ticker + company name for the "top ~1000 holdings".
+
+IWB_HOLDINGS_CSV_URL = (
+    "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
+    "1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund"
+)
+
+IWB_USER_AGENT = os.getenv(
+    "IWB_USER_AGENT",
+    "macro-dashboard (contact: admin@localhost)",
+)
+
+IWB_SYMBOLS_CACHE_TTL_HOURS = float(os.getenv("IWB_SYMBOLS_CACHE_TTL_HOURS", "24"))
+
+# In-memory cache; good enough for a single-process dev server.
+_ihshares_symbols_cache: Dict[str, Any] = {
+    "data": None,  # List[dict] or None
+    "fetchedAt": None,  # datetime or None
+}
+
+
+def _fetch_ihshares_equity_symbols(limit: int) -> Dict[str, Any]:
+    """
+    Fetch iShares Russell 1000 holdings and map to the frontend autocomplete shape.
+    Returns a dict suitable for directly serializing as the API response.
+    """
+    limit = max(0, int(limit))
+
+    try:
+        req = urllib.request.Request(
+            IWB_HOLDINGS_CSV_URL,
+            headers={"User-Agent": IWB_USER_AGENT},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw_bytes = resp.read()
+
+        # The download includes header text lines; the actual table header begins after 9 rows.
+        # Example: columns include `Ticker` and `Name`.
+        df = pd.read_csv(
+            BytesIO(raw_bytes),
+            sep=",",
+            header=0,
+            skiprows=9,
+            encoding="utf-8-sig",
+        )
+
+        # Keep only equity holdings and filter out footer/metadata rows.
+        df["Ticker"] = df["Ticker"].astype(str)
+        mask_equity = df["Asset Class"].astype(str).str.lower().eq("equity")
+        mask_valid_ticker = df["Ticker"].str.match(r"^[A-Z0-9]+$")
+        mask_name = df["Name"].notna() & (df["Name"].astype(str).str.len() > 0)
+        df = df[mask_equity & mask_valid_ticker & mask_name]
+
+        # "Top 1000": take first N rows in the file after the equity filter.
+        df = df.head(limit)
+
+        mapped: List[Dict[str, str]] = []
+        for _, row in df.iterrows():
+            ticker = str(row["Ticker"]).strip().upper()
+            name = str(row["Name"]).strip()
+
+            # Known mismatch: iShares uses dotless class tickers; TradingView typically uses dots.
+            if ticker == "BRKB":
+                ticker = "BRK.B"
+
+            mapped.append({"symbol": ticker, "label": name})
+
+        return {
+            "symbols": mapped,
+            "source": "ihshares",
+            "ihsharesStatus": getattr(resp, "status", None),
+            "requestedLimit": limit,
+        }
+    except urllib.error.HTTPError as e:
+        return {
+            "symbols": [],
+            "source": "ihshares",
+            "ihsharesStatus": e.code,
+            "error": f"iShares HTTPError: {e.code}",
+            "requestedLimit": limit,
+        }
+    except Exception as e:
+        return {
+            "symbols": [],
+            "source": "ihshares",
+            "error": str(e),
+            "requestedLimit": limit,
+        }
 
 @app.get("/")
 def read_root():
@@ -256,6 +352,49 @@ def get_market_colours():
             })
 
     return result
+
+
+@app.get("/api/autocomplete-symbols")
+def autocomplete_symbols(limit: int = 1000):
+    """
+    Returns symbols for the frontend autocomplete dropdown.
+    Source: iShares Russell 1000 ETF holdings (proxy + cache).
+    """
+    # Requirement: top ~1000 companies from iShares holdings.
+    # If caller requests a different limit, clamp it to [0, 1000].
+    limit = min(max(int(limit), 0), 1000)
+
+    now = datetime.utcnow()
+    ttl = timedelta(hours=IWB_SYMBOLS_CACHE_TTL_HOURS)
+
+    cached_data: Optional[List[Dict[str, str]]] = _ihshares_symbols_cache["data"]
+    fetched_at: Optional[datetime] = _ihshares_symbols_cache["fetchedAt"]
+
+    if cached_data is not None and fetched_at is not None:
+        if now - fetched_at < ttl:
+            return {
+                "symbols": cached_data[:limit],
+                "source": "ihshares",
+                "fetchedAt": fetched_at.isoformat(),
+                "cached": True,
+                "requestedLimit": limit,
+            }
+
+    # Cache miss or expired.
+    resp = _fetch_ihshares_equity_symbols(limit=1000)
+    # Always cache whatever we got back (including empty list) to avoid hammering SEC.
+    _ihshares_symbols_cache["data"] = resp.get("symbols", [])
+    _ihshares_symbols_cache["fetchedAt"] = now
+
+    return {
+        "symbols": _ihshares_symbols_cache["data"][:limit],
+        "source": "ihshares",
+        "fetchedAt": now.isoformat(),
+        "cached": False,
+        "ihsharesStatus": resp.get("ihsharesStatus"),
+        "error": resp.get("error"),
+        "requestedLimit": limit,
+    }
 
 
 if __name__ == "__main__":

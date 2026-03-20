@@ -11,29 +11,6 @@ export const SYMBOLS = [
   { symbol: 'DJI',       label: 'Dow Jones Index' },
   { symbol: 'RUT',       label: 'Russell 2000 Index' },
 
-  // === FUTURES — FRONT MONTH (1!) ===
-  { symbol: 'CME:ES1!',    label: 'S&P 500 E-mini Futures — Front Month' },
-  { symbol: 'CME:NQ1!',    label: 'Nasdaq E-mini Futures — Front Month' },
-  { symbol: 'CME:RTY1!',   label: 'Russell 2000 E-mini Futures — Front Month' },
-  { symbol: 'CBOT:YM1!',   label: 'Dow Jones E-mini Futures — Front Month' },
-  { symbol: 'NYMEX:CL1!',  label: 'WTI Crude Oil Futures — Front Month' },
-  { symbol: 'NYMEX:BB1!',  label: 'Brent Crude Oil Futures — Front Month' },
-  { symbol: 'NYMEX:NG1!',  label: 'Natural Gas Futures — Front Month' },
-  { symbol: 'NYMEX:RB1!',  label: 'RBOB Gasoline Futures — Front Month' },
-  { symbol: 'COMEX:GC1!',  label: 'Gold Futures — Front Month' },
-  { symbol: 'COMEX:SI1!',  label: 'Silver Futures — Front Month' },
-  { symbol: 'COMEX:HG1!',  label: 'Copper Futures — Front Month' },
-  { symbol: 'CBOT:ZN1!',   label: '10-Year Treasury Note Futures — Front Month' },
-  { symbol: 'CBOT:ZB1!',   label: '30-Year Treasury Bond Futures — Front Month' },
-  { symbol: 'CBOT:ZT1!',   label: '2-Year Treasury Note Futures — Front Month' },
-  { symbol: 'CME:6E1!',    label: 'Euro FX Futures — Front Month' },
-  { symbol: 'CME:6J1!',    label: 'Japanese Yen Futures — Front Month' },
-  { symbol: 'CME:6B1!',    label: 'British Pound Futures — Front Month' },
-  { symbol: 'CME:BTC1!',   label: 'Bitcoin CME Futures — Front Month' },
-  { symbol: 'CBOT:ZC1!',   label: 'Corn Futures — Front Month' },
-  { symbol: 'CBOT:ZW1!',   label: 'Wheat Futures — Front Month' },
-  { symbol: 'CBOT:ZS1!',   label: 'Soybean Futures — Front Month' },
-
 
   // === MEGA-CAP STOCKS ===
   { symbol: 'AAPL',  label: 'Apple Inc.' },
