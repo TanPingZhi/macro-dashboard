@@ -14,8 +14,8 @@ const PAGES = {
 function App() {
   const [activePage, setActivePage] = useState(PAGES.DASHBOARD);
   const [charts, setCharts] = useState([
-    { i: 'AAPL', ticker: 'AAPL', x: 0, y: 0, w: 6, h: 2, minW: 2, minH: 2 },
-    { i: 'TSLA', ticker: 'TSLA', x: 6, y: 0, w: 6, h: 2, minW: 2, minH: 2 }
+    { i: 'SPY', ticker: 'SPY', x: 0, y: 0, w: 6, h: 2, minW: 2, minH: 2 },
+    { i: 'GLD', ticker: 'GLD', x: 6, y: 0, w: 6, h: 2, minW: 2, minH: 2 }
   ]);
 
   const addChart = (ticker) => {

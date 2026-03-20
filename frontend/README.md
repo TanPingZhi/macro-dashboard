@@ -1,3 +1,15 @@
+## Setup instructions
+
+- For the backend
+cd /path/to/macro-dashboard/backend
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+- For the frontend
+cd /path/to/Desktop/macro-dashboard/frontend
+npm run dev -- --host 0.0.0.0 --port 5173 --strictPort
+
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
