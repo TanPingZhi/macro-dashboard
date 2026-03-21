@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChartWidget } from './components/ChartWidget';
 import { TickerSearch } from './components/TickerSearch';
 import { MarketColours } from './components/MarketColours';
+import { MacroDashboard } from './components/MacroDashboard';
 import { Responsive, WidthProvider } from 'react-grid-layout/legacy';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -9,6 +10,7 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 const PAGES = {
   DASHBOARD: 'DASHBOARD',
   MARKET_COLOURS: 'MARKET_COLOURS',
+  MACRO: 'MACRO',
 };
 
 function App() {
@@ -67,6 +69,12 @@ function App() {
             >
               MARKET COLOURS
             </button>
+            <button
+              className={`nav-tab ${activePage === PAGES.MACRO ? 'active' : ''}`}
+              onClick={() => setActivePage(PAGES.MACRO)}
+            >
+              MACRO DATA
+            </button>
           </nav>
         </div>
         {activePage === PAGES.DASHBOARD && <TickerSearch onAdd={addChart} />}
@@ -101,6 +109,7 @@ function App() {
       )}
 
       {activePage === PAGES.MARKET_COLOURS && <MarketColours />}
+      {activePage === PAGES.MACRO && <MacroDashboard />}
     </div>
   );
 }

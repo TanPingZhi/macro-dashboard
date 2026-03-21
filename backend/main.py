@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 from datetime import datetime, timedelta
 import pandas as pd
+import pandas_datareader as pdr
 import numpy as np
 import math
 import urllib.request
@@ -54,6 +55,18 @@ _market_colours_cache: Dict[str, Any] = {
 }
 
 MARKET_COLOURS_CACHE_TTL_MINUTES = float(os.getenv("MARKET_COLOURS_CACHE_TTL_MINUTES", "30"))
+
+_macro_gdp_cache: Dict[str, Any] = {
+    "data": None,
+    "fetchedAt": None,
+}
+
+_macro_gdp_breakdowns_cache: Dict[str, Any] = {
+    "data": None,
+    "fetchedAt": None,
+}
+
+MACRO_GDP_CACHE_TTL_HOURS = float(os.getenv("MACRO_GDP_CACHE_TTL_HOURS", "24"))
 
 
 def _fetch_ihshares_equity_symbols(limit: int) -> Dict[str, Any]:
@@ -156,6 +169,102 @@ def get_ticker_data(ticker: str, period: str = "1mo", interval: str = "1d"):
             })
             
         return {"ticker": ticker, "data": formatted_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/macro/gdp")
+def get_macro_gdp():
+    now = datetime.utcnow()
+    ttl = timedelta(hours=MACRO_GDP_CACHE_TTL_HOURS)
+
+    if _macro_gdp_cache["data"] is not None and _macro_gdp_cache["fetchedAt"] is not None:
+        if now - _macro_gdp_cache["fetchedAt"] < ttl:
+            return _macro_gdp_cache["data"]
+
+    tickers = ["GDP", "GDPC1", "PCE", "PCECC96", "GPDI", "GPDIC1", "GCE", "GCEC1", "NETEXP", "NETEXC"]
+    try:
+        # Fetch data for the last 20 years
+        start_date = datetime.now() - timedelta(days=20*365)
+        df = pdr.get_data_fred(tickers, start=start_date)
+        
+        # Forward fill to handle quarterly to monthly alignment
+        df = df.ffill().dropna()
+
+        formatted_data = []
+        for index, row in df.iterrows():
+            formatted_data.append({
+                "time": index.strftime('%Y-%m-%d'),
+                "GDP": float(row["GDP"]),
+                "GDPC1": float(row["GDPC1"]),
+                "PCE": float(row["PCE"]),
+                "PCECC96": float(row["PCECC96"]),
+                "GPDI": float(row["GPDI"]),
+                "GPDIC1": float(row["GPDIC1"]),
+                "GCE": float(row["GCE"]),
+                "GCEC1": float(row["GCEC1"]),
+                "NETEXP": float(row["NETEXP"]),
+                "NETEXPC1": float(row["NETEXC"]),
+            })
+            
+        result = {"data": formatted_data, "fetchedAt": now.isoformat()}
+        _macro_gdp_cache["data"] = result
+        _macro_gdp_cache["fetchedAt"] = now
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/macro/gdp/breakdowns")
+def get_macro_gdp_breakdowns():
+    now = datetime.utcnow()
+    ttl = timedelta(hours=MACRO_GDP_CACHE_TTL_HOURS)
+
+    if _macro_gdp_breakdowns_cache["data"] is not None and _macro_gdp_breakdowns_cache["fetchedAt"] is not None:
+        if now - _macro_gdp_breakdowns_cache["fetchedAt"] < ttl:
+            return _macro_gdp_breakdowns_cache["data"]
+
+    tickers = [
+        'PCDG', 'PCND', 'PCESV', 
+        'PNFI', 'PRFI', 'CBI', 
+        'FGCE', 'FDEFX', 'FNDEFX', 'SLCE', 
+        'B013RC1Q027SBEA', 'B010RC1Q027SBEA', 'B009RC1Q027SBEA', 
+        'B018RC1Q027SBEA', 'B017RC1Q027SBEA', 'B016RC1Q027SBEA'
+    ]
+    try:
+        start_date = datetime.now() - timedelta(days=20*365)
+        df = pdr.get_data_fred(tickers, start=start_date)
+        
+        df = df.ffill().dropna()
+
+        formatted_data = []
+        for index, row in df.iterrows():
+            formatted_data.append({
+                "time": index.strftime('%Y-%m-%d'),
+                "PCDG": float(row["PCDG"]),
+                "PCND": float(row["PCND"]),
+                "PCESV": float(row["PCESV"]),
+                "PNFI": float(row["PNFI"]),
+                "PRFI": float(row["PRFI"]),
+                "CBI": float(row["CBI"]),
+                "FGCE": float(row["FGCE"]),
+                "FDEFX": float(row["FDEFX"]),
+                "FNDEFX": float(row["FNDEFX"]),
+                "SLCE": float(row["SLCE"]),
+                "EX_CONS": float(row["B013RC1Q027SBEA"]),
+                "EX_IND": float(row["B010RC1Q027SBEA"]),
+                "EX_FOOD": float(row["B009RC1Q027SBEA"]),
+                "IM_CAP": float(row["B018RC1Q027SBEA"]),
+                "IM_IND": float(row["B017RC1Q027SBEA"]),
+                "IM_FOOD": float(row["B016RC1Q027SBEA"]),
+            })
+            
+        result = {"data": formatted_data, "fetchedAt": now.isoformat()}
+        _macro_gdp_breakdowns_cache["data"] = result
+        _macro_gdp_breakdowns_cache["fetchedAt"] = now
+        
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
