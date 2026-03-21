@@ -42,11 +42,18 @@ IWB_USER_AGENT = os.getenv(
 
 IWB_SYMBOLS_CACHE_TTL_HOURS = float(os.getenv("IWB_SYMBOLS_CACHE_TTL_HOURS", "24"))
 
-# In-memory cache; good enough for a single-process dev server.
+# In-memory caches; good enough for a single-process dev server.
 _ihshares_symbols_cache: Dict[str, Any] = {
     "data": None,  # List[dict] or None
     "fetchedAt": None,  # datetime or None
 }
+
+_market_colours_cache: Dict[str, Any] = {
+    "data": None,
+    "fetchedAt": None,
+}
+
+MARKET_COLOURS_CACHE_TTL_MINUTES = float(os.getenv("MARKET_COLOURS_CACHE_TTL_MINUTES", "30"))
 
 
 def _fetch_ihshares_equity_symbols(limit: int) -> Dict[str, Any]:
@@ -260,9 +267,18 @@ def get_market_colours():
         for item in group:
             all_tickers.append(item["ticker"])
 
+    # Check cache
+    now = datetime.utcnow()
+    ttl = timedelta(minutes=MARKET_COLOURS_CACHE_TTL_MINUTES)
+    
+    if _market_colours_cache["data"] is not None and _market_colours_cache["fetchedAt"] is not None:
+        if now - _market_colours_cache["fetchedAt"] < ttl:
+            return _market_colours_cache["data"]
+
     # Fetch 5 years of daily data — needed for the rolling vol z-score distribution
     try:
-        raw = yf.download(all_tickers, period="5y", interval="1d", group_by="ticker", auto_adjust=True, progress=False)
+        # Use threads=True for faster bulk download
+        raw = yf.download(all_tickers, period="5y", interval="1d", group_by="ticker", auto_adjust=True, progress=False, threads=True)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -350,6 +366,10 @@ def get_market_colours():
                 "month_hi": data["month_hi"] if data else None,
                 "month_pct": data["month_pct"] if data else None,
             })
+
+    # Store in cache
+    _market_colours_cache["data"] = result
+    _market_colours_cache["fetchedAt"] = now
 
     return result
 
